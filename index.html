@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Label Maker — CSV/Excel to printable PDF labels</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
+
+<!-- libs (cdnjs) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --paper:#EFEFE9;
+    --panel:#FBFBF8;
+    --ink:#16181A;
+    --muted:#6A6E6B;
+    --line:#DCDCD3;
+    --line-strong:#C4C4B8;
+    --accent:#1F44C8;
+    --accent-ink:#12298a;
+    --ok:#157347;
+    --radius:4px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Inter",system-ui,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px;}
+
+  header.masthead{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:16px;border-bottom:1.5px solid var(--ink);padding-bottom:14px;margin-bottom:8px;flex-wrap:wrap;
+  }
+  .brand{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.02em;}
+  .brand .mark{color:var(--accent);}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:28px;align-items:start;}
+  @media (max-width:780px){.grid{grid-template-columns:1fr;gap:24px;}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .eyebrow .n{background:var(--ink);color:var(--paper);width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;font-weight:500;}
+
+  /* source toggle */
+  .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;margin-bottom:16px;}
+  .seg button{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:7px 14px;background:transparent;border:0;cursor:pointer;color:var(--muted);letter-spacing:0.04em;}
+  .seg button.on{background:var(--ink);color:var(--paper);}
+
+  .drop{display:block;border:1.5px dashed var(--line-strong);border-radius:var(--radius);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s;position:relative;}
+  .drop::before{content:'';position:absolute;inset:0;background:var(--accent);opacity:0;pointer-events:none;transition:opacity .15s;border-radius:var(--radius);}
+  .drop:hover,.drop.drag{border-color:var(--accent);}
+  .drop:hover::before,.drop.drag::before{opacity:0.06;}
+  .drop:active::before{opacity:0.13;}
+  .drop strong{display:block;font-weight:500;}
+  .drop small{color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:11px;}
+  input[type=file]{display:none;}
+
+  textarea{width:100%;min-height:150px;border:1px solid var(--line-strong);border-radius:var(--radius);padding:12px;font-family:"IBM Plex Mono",monospace;font-size:13px;resize:vertical;background:#fff;color:var(--ink);}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+
+  .filechip{margin-top:12px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;display:flex;justify-content:space-between;align-items:center;}
+  .filechip button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:13px;}
+
+  .field{margin-top:16px;}
+  .field > label{display:block;font-size:12px;font-weight:600;letter-spacing:0.02em;margin-bottom:6px;}
+  .cols{display:flex;flex-wrap:wrap;gap:8px;}
+  .col-pill{font-family:"IBM Plex Mono",monospace;font-size:12px;border:1px solid var(--line-strong);border-radius:20px;padding:5px 12px;cursor:pointer;user-select:none;background:#fff;color:var(--muted);}
+  .col-pill.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:14px;padding-top:14px;border-top:1px solid var(--line);cursor:pointer;}
+  .check input{accent-color:var(--accent);width:15px;height:15px;}
+
+  .dims{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .dims .field{margin-top:0;}
+  .imeasure{position:relative;}
+  .imeasure input{width:100%;border:1px solid var(--line-strong);border-radius:var(--radius);padding:9px 38px 9px 11px;font-family:"IBM Plex Mono",monospace;font-size:14px;background:#fff;color:var(--ink);}
+  .imeasure input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .imeasure .unit{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);pointer-events:none;}
+
+  .seg.small button{padding:6px 12px;}
+
+  /* preview / signature */
+  .stage{position:relative;display:flex;align-items:center;justify-content:center;padding:34px 30px 16px;min-height:300px;}
+  .dimtop,.dimside{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--muted);position:absolute;letter-spacing:0.04em;}
+  .dimtop{top:12px;left:50%;transform:translateX(-50%);}
+  .dimside{top:50%;right:8px;transform:translateY(-50%) rotate(90deg);transform-origin:center;}
+  .sheet{
+    background:#fff;border:1px solid var(--line-strong);
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 10px 30px -18px rgba(0,0,0,.35);
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    overflow:hidden;word-break:break-word;
+  }
+  .sheet span{padding:6px;line-height:1.15;display:block;width:100%;white-space:pre-line;}
+  .corner{position:absolute;width:8px;height:8px;border:1px solid var(--line-strong);}
+
+  .meta{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:6px;}
+  .meta b{color:var(--ink);font-weight:500;}
+  .nav{display:flex;gap:6px;align-items:center;}
+  .nav button{border:1px solid var(--line-strong);background:#fff;border-radius:3px;width:26px;height:24px;cursor:pointer;color:var(--ink);}
+  .nav button:disabled{opacity:.35;cursor:default;}
+
+  .cta{margin-top:20px;display:flex;gap:12px;align-items:center;}
+  .btn{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;border:0;border-radius:var(--radius);padding:13px 22px;cursor:pointer;letter-spacing:-0.01em;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-ink);}
+  .btn-primary:disabled{background:var(--line-strong);color:#fff;cursor:not-allowed;}
+  .hint{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);}
+
+  footer{margin-top:42px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);text-align:center;letter-spacing:0.03em;}
+  footer a{color:var(--muted);}
+  .empty{color:var(--muted);font-style:italic;}
+</style>
+</head>
+
+<body>
+<div class="wrap" x-data="labelPress()" x-cloak>
+
+  <header class="masthead">
+    <div class="brand">Label<span class="mark">·</span>Maker</div>
+    <div class="tag">csv / xlsx → print-ready pdf · type it in or upload a file</div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ CONTROLS ============ -->
+    <section>
+      <div class="panel">
+        <div class="eyebrow"><span class="n">1</span> Source</div>
+
+        <div class="seg">
+          <button :class="src==='file' && 'on'" @click="src='file'">Upload file</button>
+          <button :class="src==='paste' && 'on'" @click="src='paste'">Paste lines</button>
+        </div>
+
+        <template x-if="src==='file'">
+          <div>
+            <label class="drop" :class="dragging && 'drag'"
+              @dragover.prevent="dragging=true" @dragleave.prevent="dragging=false"
+              @drop.prevent="onDrop($event)">
+              <input type="file" accept=".csv,.tsv,.xlsx,.xls" @change="onPick($event)" />
+              <strong>Drop a CSV or Excel file here</strong>
+              <small>or click to browse · .csv .xlsx .xls</small>
+            </label>
+            <template x-if="fileName">
+              <div class="filechip">
+                <span x-text="fileName + '  ·  ' + rows.length + ' rows'"></span>
+                <button @click="clearData()" title="Remove">✕</button>
+              </div>
+            </template>
+            <label class="check">
+              <input type="checkbox" x-model="hasHeader" @change="reparse()" />
+              First row is a header
+            </label>
+          </div>
+        </template>
+
+        <template x-if="src==='paste'">
+          <div>
+            <textarea x-model="pasted" @input="parsePaste()"
+              placeholder="One label per line, e.g.&#10;Crate A-01&#10;Crate A-02&#10;Crate A-03"></textarea>
+          </div>
+        </template>
+
+        <!-- column picker (file only, multi-column) -->
+        <template x-if="src==='file' && columns.length>1">
+          <div class="field">
+            <label>Columns to print <span class="hint">(stacked, top to bottom)</span></label>
+            <div class="cols">
+              <template x-for="(c,i) in columns" :key="i">
+                <span class="col-pill" :class="selected.includes(i) && 'on'" @click="toggleCol(i)" x-text="c"></span>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- grouping: how rows become pages -->
+        <div class="field">
+          <label>Group rows into labels <span class="hint">— how pages are split</span></label>
+          <div class="seg small" style="flex-wrap:wrap;">
+            <button :class="groupMode==='single' && 'on'" @click="setGroup('single')">One row each</button>
+            <button :class="groupMode==='blank' && 'on'" @click="setGroup('blank')">Blank row = break</button>
+            <button x-show="src==='file'" :class="groupMode==='column' && 'on'" @click="setGroup('column')">By column</button>
+          </div>
+          <template x-if="groupMode==='column' && src==='file'">
+            <select x-model.number="groupCol" @change="idx=0"
+              style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--line-strong);border-radius:var(--radius);font-family:'IBM Plex Mono',monospace;font-size:13px;background:#fff;color:var(--ink);">
+              <template x-for="(c,i) in columns" :key="i">
+                <option :value="i" x-text="'Group by: '+c"></option>
+              </template>
+            </select>
+          </template>
+          <p class="hint" x-show="groupMode==='blank'" style="margin:8px 0 0;line-height:1.4;">
+            Leave an empty row in your file (or a blank line when pasting) wherever the next label should start.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:20px;">
+        <div class="eyebrow"><span class="n">2</span> Label spec</div>
+
+        <div class="dims">
+          <div class="field">
+            <label>Width</label>
+            <div class="imeasure"><input type="number" min="1" step="1" x-model.number="w" /><span class="unit">mm</span></div>
+          </div>
+          <div class="field">
+            <label>Height</label>
+            <div class="imeasure"><input type="number" min="1" step="1" x-model.number="h" /><span class="unit">mm</span></div>
+          </div>
+        </div>
+
+        <div class="dims" style="margin-top:14px;">
+          <div class="field">
+            <label>Font size</label>
+            <div class="imeasure"><input type="number" min="4" step="1" x-model.number="fontSize" /><span class="unit">pt</span></div>
+          </div>
+          <div class="field">
+            <label>Inner margin</label>
+            <div class="imeasure"><input type="number" min="0" step="1" x-model.number="margin" /><span class="unit">mm</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Alignment</label>
+          <div class="seg small">
+            <button :class="align==='left' && 'on'" @click="align='left'">Left</button>
+            <button :class="align==='center' && 'on'" @click="align='center'">Center</button>
+            <button :class="align==='right' && 'on'" @click="align='right'">Right</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PREVIEW + EXPORT ============ -->
+    <section>
+      <div class="panel">
+        <div class="eyebrow"><span class="n">3</span> Preview</div>
+
+        <div class="stage">
+          <div class="dimtop" x-text="w + ' mm'"></div>
+          <div class="dimside" x-text="h + ' mm'"></div>
+          <div class="sheet" :style="sheetStyle()">
+            <span :style="textStyle()" x-text="currentText() || '—'" :class="!currentText() && 'empty'"></span>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div class="nav">
+            <button @click="prev()" :disabled="labels.length<2">‹</button>
+            <span x-text="labels.length ? (idx+1)+' / '+labels.length : '0 / 0'"></span>
+            <button @click="next()" :disabled="labels.length<2">›</button>
+          </div>
+          <div><b x-text="rows.length"></b> rows → <b x-text="labels.length"></b> page<span x-show="labels.length!==1">s</span></div>
+        </div>
+      </div>
+
+      <div class="cta">
+        <button class="btn btn-primary" @click="generate()" :disabled="!labels.length || busy"
+          x-text="busy ? 'Building…' : 'Download PDF'"></button>
+        <span class="hint" x-show="labels.length" x-text="w+'×'+h+' mm · one label per page'"></span>
+      </div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+function labelPress(){
+  return {
+    src:'file', dragging:false,
+    fileName:'', hasHeader:true,
+    rows:[], rowsRaw:[], columns:[], selected:[0],
+    rawAOA:[],            // array-of-arrays from last parse (for header re-toggle)
+    pasted:'',
+    groupMode:'single', groupCol:0,
+    w:200, h:250, fontSize:48, margin:10, align:'center',
+    idx:0, busy:false,
+
+    // ---------- file input ----------
+    onPick(e){ const f=e.target.files[0]; if(f) this.readFile(f); },
+    onDrop(e){ this.dragging=false; const f=e.dataTransfer.files[0]; if(f) this.readFile(f); },
+
+    readFile(file){
+      this.fileName=file.name;
+      const ext=file.name.split('.').pop().toLowerCase();
+      if(ext==='xlsx'||ext==='xls'){
+        const r=new FileReader();
+        r.onload=ev=>{
+          const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          this.rawAOA=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:true,defval:''});
+          this.applyAOA();
+        };
+        r.readAsArrayBuffer(file);
+      } else {
+        Papa.parse(file,{skipEmptyLines:false,complete:res=>{
+          this.rawAOA=res.data; this.applyAOA();
+        }});
+      }
+    },
+
+    isBlank(r){ return !r || !r.length || r.every(c=>c==null||String(c).trim()===''); },
+
+    applyAOA(){
+      let data=this.rawAOA.slice();
+      while(data.length && this.isBlank(data[0])) data.shift();          // trim leading blanks
+      while(data.length && this.isBlank(data[data.length-1])) data.pop();// trim trailing blanks
+      if(!data.length){ this.clearData(); return; }
+      let body;
+      if(this.hasHeader){
+        this.columns=data[0].map((c,i)=>String(c).trim()||('Col '+(i+1)));
+        body=data.slice(1);
+      } else {
+        this.columns=data[0].map((_,i)=>'Col '+(i+1));
+        body=data;
+      }
+      this.rowsRaw=body;                                  // keeps internal blanks (separators)
+      this.rows=body.filter(r=>!this.isBlank(r));         // clean rows for display
+      this.selected=this.columns.map((_,i)=>i);
+      this.idx=0;
+    },
+    reparse(){ if(this.rawAOA.length) this.applyAOA(); },
+
+    clearData(){ this.fileName=''; this.rows=[]; this.rowsRaw=[]; this.columns=[]; this.rawAOA=[]; this.selected=[0]; this.idx=0; },
+
+    // ---------- paste input ----------
+    parsePaste(){
+      let lines=this.pasted.split(/\r?\n/);
+      while(lines.length && lines[0].trim()==='') lines.shift();
+      while(lines.length && lines[lines.length-1].trim()==='') lines.pop();
+      this.rowsRaw=lines.map(l=>[l]);
+      this.rows=this.rowsRaw.filter(r=>r[0].trim()!=='');
+      this.columns=['Line']; this.selected=[0]; this.idx=0;
+    },
+
+    setGroup(m){ this.groupMode=m; this.idx=0; },
+
+    toggleCol(i){
+      if(this.selected.includes(i)) this.selected=this.selected.filter(x=>x!==i);
+      else this.selected=[...this.selected,i].sort((a,b)=>a-b);
+      if(!this.selected.length) this.selected=[i];
+    },
+
+    // ---------- grouping ----------
+    rowToLines(r){
+      const cols=this.src==='paste'?[0]:(this.selected.length?this.selected:[0]);
+      return cols.map(i=>(r[i]!=null?String(r[i]):'').trim()).filter(Boolean);
+    },
+    get groups(){
+      if(this.groupMode==='blank'){
+        const out=[]; let cur=[];
+        (this.rowsRaw||[]).forEach(r=>{
+          if(this.isBlank(r)){ if(cur.length){out.push(cur);cur=[];} }
+          else cur.push(r);
+        });
+        if(cur.length) out.push(cur);
+        return out;
+      }
+      if(this.groupMode==='column'){
+        const map=new Map(), order=[];
+        this.rows.forEach(r=>{
+          const key=String(r[this.groupCol]!=null?r[this.groupCol]:'').trim();
+          if(!map.has(key)){ map.set(key,[]); order.push(key); }
+          map.get(key).push(r);
+        });
+        return order.map(k=>map.get(k));
+      }
+      return this.rows.map(r=>[r]);   // one row per label
+    },
+
+    // ---------- label text ----------
+    get labels(){
+      return this.groups
+        .map(g=>g.flatMap(r=>this.rowToLines(r)).join('\n'))
+        .filter(t=>t!=='');
+    },
+    currentText(){ const L=this.labels; if(!L.length) return ''; return L[Math.min(this.idx,L.length-1)] ?? ''; },
+    next(){ if(this.idx<this.labels.length-1) this.idx++; },
+    prev(){ if(this.idx>0) this.idx--; },
+
+    // ---------- preview scaling ----------
+    sheetStyle(){
+      const maxW=240, maxH=300;
+      const ratio=this.w/this.h;
+      let pw=maxW, ph=maxW/ratio;
+      if(ph>maxH){ ph=maxH; pw=maxH*ratio; }
+      return `width:${pw}px;height:${ph}px;padding:${(this.margin/this.w)*pw}px;`;
+    },
+    textStyle(){
+      // scale pt → preview px using same width ratio as the sheet
+      const maxW=240, maxH=300, ratio=this.w/this.h;
+      let pw=maxW; if(maxW/ratio>maxH) pw=maxH*ratio;
+      const pxPerMm=pw/this.w;
+      const px=this.fontSize*0.3528*pxPerMm;   // pt→mm→px
+      return `font-size:${px}px;text-align:${this.align};`;
+    },
+
+    // ---------- PDF export ----------
+    generate(){
+      if(!this.labels.length) return;
+      this.busy=true;
+      try{
+        const { jsPDF }=window.jspdf;
+        const orient=this.w>this.h?'landscape':'portrait';
+        const doc=new jsPDF({unit:'mm',orientation:orient,format:[this.w,this.h]});
+        const maxW=this.w-2*this.margin;
+        const lhMm=this.fontSize*0.3528*1.15;
+        const x=this.align==='center'?this.w/2:(this.align==='right'?this.w-this.margin:this.margin);
+
+        this.labels.forEach((text,i)=>{
+          if(i>0) doc.addPage([this.w,this.h],orient);
+          doc.setFont('helvetica','normal');
+          doc.setFontSize(this.fontSize);
+          const lines=doc.splitTextToSize(text,maxW);
+          const blockH=lines.length*lhMm;
+          let y=(this.h-blockH)/2 + lhMm*0.78;
+          doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
+        });
+        doc.save('labels.pdf');
+      } finally { this.busy=false; }
+    },
+  };
+}
+</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
+<style>[x-cloak]{display:none!important;}</style>
+</body>
+</html>
