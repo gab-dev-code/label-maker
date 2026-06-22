@@ -92,6 +92,9 @@
 
   .seg.small button{padding:6px 12px;}
 
+  .txtinput{width:100%;border:1px solid var(--line-strong);border-radius:var(--radius);padding:9px 11px;font-family:"IBM Plex Mono",monospace;font-size:13px;background:#fff;color:var(--ink);}
+  .txtinput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+
   /* preview / signature */
   .stage{position:relative;display:flex;align-items:center;justify-content:center;padding:34px 30px 16px;min-height:300px;}
   .dimtop,.dimside{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--muted);position:absolute;letter-spacing:0.04em;}
@@ -100,10 +103,14 @@
   .sheet{
     background:#fff;border:1px solid var(--line-strong);
     box-shadow:0 1px 0 rgba(0,0,0,.04),0 10px 30px -18px rgba(0,0,0,.35);
-    display:flex;align-items:center;justify-content:center;text-align:center;
+    display:flex;flex-direction:column;
     overflow:hidden;word-break:break-word;
   }
-  .sheet span{padding:6px;line-height:1.15;display:block;width:100%;white-space:pre-line;}
+  .sheet-main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;}
+  .sheet-main span{padding:4px;line-height:1.15;display:block;width:100%;white-space:pre-line;}
+  .sheet-foot{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;width:100%;padding-top:4px;}
+  .foot-logo{flex:1;min-height:0;max-width:75%;object-fit:contain;}
+  .foot-web{font-family:"IBM Plex Mono",monospace;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .corner{position:absolute;width:8px;height:8px;border:1px solid var(--line-strong);}
 
   .meta{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:6px;}
@@ -242,6 +249,46 @@
           </div>
         </div>
       </div>
+
+      <div class="panel" style="margin-top:20px;">
+        <div class="eyebrow"><span class="n">+</span> Footer <span class="hint" style="text-transform:none;letter-spacing:0;">— printed on every label</span></div>
+
+        <div class="field" style="margin-top:0;">
+          <label>Logo <span class="hint">(black &amp; white PNG, JPG or SVG)</span></label>
+          <template x-if="!logoData">
+            <label class="drop" style="padding:16px;">
+              <input type="file" accept="image/*,.svg" @change="onLogo($event)" />
+              <strong style="font-size:14px;">Add a logo</strong>
+              <small>click to choose an image</small>
+            </label>
+          </template>
+          <template x-if="logoData">
+            <div class="filechip">
+              <span style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <img :src="logoData" alt="" style="height:22px;max-width:90px;object-fit:contain;" />
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="logoName"></span>
+              </span>
+              <button @click="clearLogo()" title="Remove">✕</button>
+            </div>
+          </template>
+        </div>
+
+        <div class="field">
+          <label>Website</label>
+          <input type="text" class="txtinput" x-model="website" placeholder="www.solarix.nl" />
+        </div>
+
+        <div class="dims" style="margin-top:14px;">
+          <div class="field">
+            <label>Footer height</label>
+            <div class="imeasure"><input type="number" min="0" step="1" x-model.number="footerH" /><span class="unit">mm</span></div>
+          </div>
+          <div class="field">
+            <label>Footer text size</label>
+            <div class="imeasure"><input type="number" min="4" step="1" x-model.number="footFont" /><span class="unit">pt</span></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ PREVIEW + EXPORT ============ -->
@@ -253,7 +300,13 @@
           <div class="dimtop" x-text="w + ' mm'"></div>
           <div class="dimside" x-text="h + ' mm'"></div>
           <div class="sheet" :style="sheetStyle()">
-            <span :style="textStyle()" x-text="currentText() || '—'" :class="!currentText() && 'empty'"></span>
+            <div class="sheet-main">
+              <span :style="textStyle()" x-text="currentText() || '—'" :class="!currentText() && 'empty'"></span>
+            </div>
+            <div class="sheet-foot" x-show="hasFooter()" :style="footStyle()">
+              <img x-show="logoData" :src="logoData" class="foot-logo" alt="" />
+              <div x-show="website && website.trim()" class="foot-web" :style="footWebStyle()" x-text="website"></div>
+            </div>
           </div>
         </div>
 
@@ -286,7 +339,8 @@ function labelPress(){
     rawAOA:[],            // array-of-arrays from last parse (for header re-toggle)
     pasted:'',
     groupMode:'single', groupCol:0,
-    w:200, h:250, fontSize:48, margin:10, align:'center',
+    w:150, h:100, fontSize:36, margin:10, align:'left',
+    logoData:null, logoName:'', logoAspect:1, website:'', footerH:20, footFont:10,
     idx:0, busy:false,
 
     // ---------- file input ----------
@@ -354,6 +408,28 @@ function labelPress(){
       if(!this.selected.length) this.selected=[i];
     },
 
+    // ---------- logo ----------
+    onLogo(e){ const f=e.target.files[0]; if(f) this.loadLogo(f); },
+    loadLogo(file){
+      this.logoName=file.name;
+      const url=URL.createObjectURL(file);
+      const img=new Image();
+      img.onload=()=>{
+        let nw=img.naturalWidth||img.width, nh=img.naturalHeight||img.height;
+        if(!nw||!nh){ nw=800; nh=800; }          // SVG with no intrinsic size
+        const targetW=Math.max(nw,700);           // upscale small art for crisp print
+        const s=targetW/nw, cw=Math.round(nw*s), ch=Math.round(nh*s);
+        const cv=document.createElement('canvas'); cv.width=cw; cv.height=ch;
+        cv.getContext('2d').drawImage(img,0,0,cw,ch);
+        this.logoData=cv.toDataURL('image/png');  // PNG keeps transparency
+        this.logoAspect=nw/nh;
+        URL.revokeObjectURL(url);
+      };
+      img.onerror=()=>{ URL.revokeObjectURL(url); this.logoName=''; alert('Could not read that image file.'); };
+      img.src=url;
+    },
+    clearLogo(){ this.logoData=null; this.logoName=''; this.logoAspect=1; },
+
     // ---------- grouping ----------
     rowToLines(r){
       const cols=this.src==='paste'?[0]:(this.selected.length?this.selected:[0]);
@@ -392,20 +468,29 @@ function labelPress(){
     prev(){ if(this.idx>0) this.idx--; },
 
     // ---------- preview scaling ----------
-    sheetStyle(){
-      const maxW=240, maxH=300;
-      const ratio=this.w/this.h;
+    previewDims(){
+      const maxW=240, maxH=300, ratio=this.w/this.h;
       let pw=maxW, ph=maxW/ratio;
       if(ph>maxH){ ph=maxH; pw=maxH*ratio; }
-      return `width:${pw}px;height:${ph}px;padding:${(this.margin/this.w)*pw}px;`;
+      return { pw, ph, pxPerMm: pw/this.w };
+    },
+    hasFooter(){ return !!(this.logoData || (this.website && this.website.trim())); },
+    sheetStyle(){
+      const d=this.previewDims();
+      return `width:${d.pw}px;height:${d.ph}px;padding:${this.margin*d.pxPerMm}px;`;
     },
     textStyle(){
-      // scale pt → preview px using same width ratio as the sheet
-      const maxW=240, maxH=300, ratio=this.w/this.h;
-      let pw=maxW; if(maxW/ratio>maxH) pw=maxH*ratio;
-      const pxPerMm=pw/this.w;
-      const px=this.fontSize*0.3528*pxPerMm;   // pt→mm→px
+      const d=this.previewDims();
+      const px=this.fontSize*0.3528*d.pxPerMm;   // pt→mm→px
       return `font-size:${px}px;text-align:${this.align};`;
+    },
+    footStyle(){
+      const d=this.previewDims();
+      return `height:${this.footerH*d.pxPerMm}px;`;
+    },
+    footWebStyle(){
+      const d=this.previewDims();
+      return `font-size:${this.footFont*0.3528*d.pxPerMm}px;`;
     },
 
     // ---------- PDF export ----------
@@ -416,18 +501,40 @@ function labelPress(){
         const { jsPDF }=window.jspdf;
         const orient=this.w>this.h?'landscape':'portrait';
         const doc=new jsPDF({unit:'mm',orientation:orient,format:[this.w,this.h]});
+
+        const footerH = this.hasFooter() ? this.footerH : 0;
+        const footerTop = this.h - this.margin - footerH;     // y where footer band starts
+        const areaTop = this.margin, areaBot = footerTop;      // main-text region
         const maxW=this.w-2*this.margin;
         const lhMm=this.fontSize*0.3528*1.15;
         const x=this.align==='center'?this.w/2:(this.align==='right'?this.w-this.margin:this.margin);
+        const web=(this.website||'').trim();
 
         this.labels.forEach((text,i)=>{
           if(i>0) doc.addPage([this.w,this.h],orient);
+
+          // main text, vertically centered in the area above the footer
           doc.setFont('helvetica','normal');
           doc.setFontSize(this.fontSize);
           const lines=doc.splitTextToSize(text,maxW);
           const blockH=lines.length*lhMm;
-          let y=(this.h-blockH)/2 + lhMm*0.78;
+          const y=areaTop + ((areaBot-areaTop)-blockH)/2 + lhMm*0.78;
           doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
+
+          // footer (same on every page)
+          if(web){
+            doc.setFontSize(this.footFont);
+            doc.text(web,this.w/2,this.h-this.margin,{align:'center',baseline:'bottom'});
+          }
+          if(this.logoData){
+            const webMm = web ? this.footFont*0.3528*1.15 + 3 : 0;
+            const bandH = footerH - webMm;
+            let lh=bandH, lw=lh*this.logoAspect;
+            if(lw>maxW){ lw=maxW; lh=lw/this.logoAspect; }
+            const lx=(this.w-lw)/2;
+            const ly=footerTop + (bandH-lh)/2;
+            doc.addImage(this.logoData,'PNG',lx,ly,lw,lh);
+          }
         });
         doc.save('labels.pdf');
       } finally { this.busy=false; }
