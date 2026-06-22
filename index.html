@@ -108,8 +108,8 @@
   }
   .sheet-main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;}
   .sheet-main span{padding:4px;line-height:1.15;display:block;width:100%;white-space:pre-line;}
-  .sheet-foot{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;width:100%;padding-top:4px;}
-  .foot-logo{flex:1;min-height:0;max-width:75%;object-fit:contain;}
+  .sheet-foot{flex:0 0 auto;display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:8px;width:100%;}
+  .foot-logo{height:80%;max-width:50%;object-fit:contain;}
   .foot-web{font-family:"IBM Plex Mono",monospace;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .corner{position:absolute;width:8px;height:8px;border:1px solid var(--line-strong);}
 
@@ -250,45 +250,6 @@
         </div>
       </div>
 
-      <div class="panel" style="margin-top:20px;">
-        <div class="eyebrow"><span class="n">+</span> Footer <span class="hint" style="text-transform:none;letter-spacing:0;">— printed on every label</span></div>
-
-        <div class="field" style="margin-top:0;">
-          <label>Logo <span class="hint">(black &amp; white PNG, JPG or SVG)</span></label>
-          <template x-if="!logoData">
-            <label class="drop" style="padding:16px;">
-              <input type="file" accept="image/*,.svg" @change="onLogo($event)" />
-              <strong style="font-size:14px;">Add a logo</strong>
-              <small>click to choose an image</small>
-            </label>
-          </template>
-          <template x-if="logoData">
-            <div class="filechip">
-              <span style="display:flex;align-items:center;gap:10px;min-width:0;">
-                <img :src="logoData" alt="" style="height:22px;max-width:90px;object-fit:contain;" />
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="logoName"></span>
-              </span>
-              <button @click="clearLogo()" title="Remove">✕</button>
-            </div>
-          </template>
-        </div>
-
-        <div class="field">
-          <label>Website</label>
-          <input type="text" class="txtinput" x-model="website" placeholder="www.solarix.nl" />
-        </div>
-
-        <div class="dims" style="margin-top:14px;">
-          <div class="field">
-            <label>Footer height</label>
-            <div class="imeasure"><input type="number" min="0" step="1" x-model.number="footerH" /><span class="unit">mm</span></div>
-          </div>
-          <div class="field">
-            <label>Footer text size</label>
-            <div class="imeasure"><input type="number" min="4" step="1" x-model.number="footFont" /><span class="unit">pt</span></div>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- ============ PREVIEW + EXPORT ============ -->
@@ -339,9 +300,22 @@ function labelPress(){
     rawAOA:[],            // array-of-arrays from last parse (for header re-toggle)
     pasted:'',
     groupMode:'single', groupCol:0,
-    w:150, h:100, fontSize:36, margin:10, align:'left',
-    logoData:null, logoName:'', logoAspect:1, website:'', footerH:20, footFont:10,
+    w:150, h:100, fontSize:36, margin:8, align:'left',
+    logoData:null, logoAspect:1, website:'solarix-solar.com', footerH:12, footFont:18,
     idx:0, busy:false,
+
+    // ---------- init ----------
+    init(){
+      const img=new Image();
+      img.onload=()=>{
+        const nw=img.naturalWidth||img.width, nh=img.naturalHeight||img.height;
+        const cv=document.createElement('canvas'); cv.width=nw; cv.height=nh;
+        cv.getContext('2d').drawImage(img,0,0,nw,nh);
+        this.logoData=cv.toDataURL('image/png');
+        this.logoAspect=nw/nh;
+      };
+      img.src='logo.png';
+    },
 
     // ---------- file input ----------
     onPick(e){ const f=e.target.files[0]; if(f) this.readFile(f); },
@@ -521,19 +495,25 @@ function labelPress(){
           const y=areaTop + ((areaBot-areaTop)-blockH)/2 + lhMm*0.78;
           doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
 
-          // footer (same on every page)
-          if(web){
-            doc.setFontSize(this.footFont);
-            doc.text(web,this.w/2,this.h-this.margin,{align:'center',baseline:'bottom'});
-          }
-          if(this.logoData){
-            const webMm = web ? this.footFont*0.3528*1.15 + 3 : 0;
-            const bandH = footerH - webMm;
-            let lh=bandH, lw=lh*this.logoAspect;
-            if(lw>maxW){ lw=maxW; lh=lw/this.logoAspect; }
-            const lx=(this.w-lw)/2;
-            const ly=footerTop + (bandH-lh)/2;
-            doc.addImage(this.logoData,'PNG',lx,ly,lw,lh);
+          // footer (same on every page) — logo left, text right, side by side
+          if(this.hasFooter()){
+            const centerY = footerTop + footerH/2;
+            if(this.logoData && web){
+              // logo bottom-left
+              let lh=footerH*0.8, lw=lh*this.logoAspect;
+              if(lw>maxW/2-4){ lw=maxW/2-4; lh=lw/this.logoAspect; }
+              doc.addImage(this.logoData,'PNG',this.margin,footerTop+footerH-lh,lw,lh);
+              // text bottom-right
+              doc.setFontSize(this.footFont);
+              doc.text(web,this.w-this.margin,this.h-this.margin,{align:'right',baseline:'bottom'});
+            } else if(this.logoData){
+              let lh=footerH*0.8, lw=lh*this.logoAspect;
+              if(lw>maxW){ lw=maxW; lh=lw/this.logoAspect; }
+              doc.addImage(this.logoData,'PNG',(this.w-lw)/2,centerY-lh/2,lw,lh);
+            } else if(web){
+              doc.setFontSize(this.footFont);
+              doc.text(web,this.w/2,centerY,{align:'center',baseline:'middle'});
+            }
           }
         });
         doc.save('labels.pdf');
