@@ -108,6 +108,11 @@
   }
   .sheet-main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;}
   .sheet-main span{padding:4px;line-height:1.15;display:block;width:100%;white-space:pre-line;}
+  .fieldrows{display:flex;flex-direction:column;width:100%;height:100%;padding:4px;}
+  .fieldrow{flex:1;display:grid;grid-template-columns:2fr 3fr 2fr 3fr;column-gap:6px;align-items:center;min-height:0;}
+  .fr-cap{color:var(--muted);white-space:pre-line;word-break:break-word;line-height:1.15;min-width:0;}
+  .fr-val{font-weight:700;white-space:pre-line;word-break:break-word;min-width:0;line-height:1.15;}
+  .fr-val.span3{grid-column:2 / 5;}
   .sheet-foot{flex:0 0 auto;display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:8px;width:100%;}
   .foot-logo{height:80%;max-width:50%;object-fit:contain;}
   .foot-web{font-family:"IBM Plex Mono",monospace;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
@@ -181,8 +186,8 @@
           </div>
         </template>
 
-        <!-- column picker (file only, multi-column) -->
-        <template x-if="src==='file' && columns.length>1">
+        <!-- column picker (file only, multi-column, simple layout only) -->
+        <template x-if="layout==='simple' && src==='file' && columns.length>1">
           <div class="field">
             <label>Columns to print <span class="hint">(stacked, top to bottom)</span></label>
             <div class="cols">
@@ -193,26 +198,40 @@
           </div>
         </template>
 
-        <!-- grouping: how rows become pages -->
-        <div class="field">
-          <label>Group rows into labels <span class="hint">— how pages are split</span></label>
-          <div class="seg small" style="flex-wrap:wrap;">
-            <button :class="groupMode==='single' && 'on'" @click="setGroup('single')">One row each</button>
-            <button :class="groupMode==='blank' && 'on'" @click="setGroup('blank')">Blank row = break</button>
-            <button x-show="src==='file'" :class="groupMode==='column' && 'on'" @click="setGroup('column')">By column</button>
-          </div>
-          <template x-if="groupMode==='column' && src==='file'">
-            <select x-model.number="groupCol" @change="idx=0"
-              style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--line-strong);border-radius:var(--radius);font-family:'IBM Plex Mono',monospace;font-size:13px;background:#fff;color:var(--ink);">
-              <template x-for="(c,i) in columns" :key="i">
-                <option :value="i" x-text="'Group by: '+c"></option>
-              </template>
-            </select>
-          </template>
-          <p class="hint" x-show="groupMode==='blank'" style="margin:8px 0 0;line-height:1.4;">
-            Leave an empty row in your file (or a blank line when pasting) wherever the next label should start.
+        <!-- project label hint -->
+        <template x-if="layout==='fields'">
+          <p class="hint" style="margin-top:10px;line-height:1.4;">
+            <template x-if="src==='file'">
+              <span>Columns fill the fields in order, left to right: <span x-text="fieldLabels.join(', ')"></span>.</span>
+            </template>
+            <template x-if="src==='paste'">
+              <span>Separate labels with a blank line. Within each block, lines fill the fields in order: <span x-text="fieldLabels.join(', ')"></span>.</span>
+            </template>
           </p>
-        </div>
+        </template>
+
+        <!-- grouping: how rows become pages (simple layout only) -->
+        <template x-if="layout==='simple'">
+          <div class="field">
+            <label>Group rows into labels <span class="hint">— how pages are split</span></label>
+            <div class="seg small" style="flex-wrap:wrap;">
+              <button :class="groupMode==='single' && 'on'" @click="setGroup('single')">One row each</button>
+              <button :class="groupMode==='blank' && 'on'" @click="setGroup('blank')">Blank row = break</button>
+              <button x-show="src==='file'" :class="groupMode==='column' && 'on'" @click="setGroup('column')">By column</button>
+            </div>
+            <template x-if="groupMode==='column' && src==='file'">
+              <select x-model.number="groupCol" @change="idx=0"
+                style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--line-strong);border-radius:var(--radius);font-family:'IBM Plex Mono',monospace;font-size:13px;background:#fff;color:var(--ink);">
+                <template x-for="(c,i) in columns" :key="i">
+                  <option :value="i" x-text="'Group by: '+c"></option>
+                </template>
+              </select>
+            </template>
+            <p class="hint" x-show="groupMode==='blank'" style="margin:8px 0 0;line-height:1.4;">
+              Leave an empty row in your file (or a blank line when pasting) wherever the next label should start.
+            </p>
+          </div>
+        </template>
       </div>
 
       <div class="panel" style="margin-top:20px;">
@@ -248,6 +267,14 @@
             <button :class="align==='right' && 'on'" @click="align='right'">Right</button>
           </div>
         </div>
+
+        <div class="field">
+          <label>Layout</label>
+          <div class="seg small">
+            <button :class="layout==='simple' && 'on'" @click="layout='simple'">Simple text</button>
+            <button :class="layout==='fields' && 'on'" @click="layout='fields'">Project label</button>
+          </div>
+        </div>
       </div>
 
     </section>
@@ -262,7 +289,25 @@
           <div class="dimside" x-text="h + ' mm'"></div>
           <div class="sheet" :style="sheetStyle()">
             <div class="sheet-main">
-              <span :style="textStyle()" x-text="currentText() || '—'" :class="!currentText() && 'empty'"></span>
+              <template x-if="layout==='simple'">
+                <span :style="textStyle()" x-text="currentText() || '—'" :class="!currentText() && 'empty'"></span>
+              </template>
+              <template x-if="layout==='fields'">
+                <div class="fieldrows">
+                  <template x-for="(row,ri) in fieldRowsWithValues()" :key="ri">
+                    <div class="fieldrow" :style="fieldRowGridStyle()">
+                      <span class="fr-cap" :style="capStyle()" x-text="row.cap1+':'"></span>
+                      <span class="fr-val" :class="!row.split && 'span3'" :style="valStyle(row.val1Pt)" x-text="row.val1"></span>
+                      <template x-if="row.split">
+                        <span class="fr-cap" :style="capStyle()" x-text="row.cap2+':'"></span>
+                      </template>
+                      <template x-if="row.split">
+                        <span class="fr-val" :style="valStyle(row.val2Pt)" x-text="row.val2"></span>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </template>
             </div>
             <div class="sheet-foot" x-show="hasFooter()" :style="footStyle()">
               <img x-show="logoData" :src="logoData" class="foot-logo" alt="" />
@@ -273,18 +318,18 @@
 
         <div class="meta">
           <div class="nav">
-            <button @click="prev()" :disabled="labels.length<2">‹</button>
-            <span x-text="labels.length ? (idx+1)+' / '+labels.length : '0 / 0'"></span>
-            <button @click="next()" :disabled="labels.length<2">›</button>
+            <button @click="prev()" :disabled="pageCount<2">‹</button>
+            <span x-text="pageCount ? (idx+1)+' / '+pageCount : '0 / 0'"></span>
+            <button @click="next()" :disabled="pageCount<2">›</button>
           </div>
-          <div><b x-text="rows.length"></b> rows → <b x-text="labels.length"></b> page<span x-show="labels.length!==1">s</span></div>
+          <div><b x-text="rows.length"></b> rows → <b x-text="pageCount"></b> page<span x-show="pageCount!==1">s</span></div>
         </div>
       </div>
 
       <div class="cta">
-        <button class="btn btn-primary" @click="generate()" :disabled="!labels.length || busy"
+        <button class="btn btn-primary" @click="generate()" :disabled="!pageCount || busy"
           x-text="busy ? 'Building…' : 'Download PDF'"></button>
-        <span class="hint" x-show="labels.length" x-text="w+'×'+h+' mm · one label per page'"></span>
+        <span class="hint" x-show="pageCount" x-text="w+'×'+h+' mm · one label per page'"></span>
       </div>
     </section>
   </div>
@@ -300,7 +345,15 @@ function labelPress(){
     rawAOA:[],            // array-of-arrays from last parse (for header re-toggle)
     pasted:'',
     groupMode:'single', groupCol:0,
-    w:150, h:100, fontSize:36, margin:8, align:'left',
+    w:152, h:102, fontSize:32, margin:4, align:'left',
+    layout:'simple',
+    fieldRows:[
+      {caps:['Project']},
+      {caps:['Delivery','Package']},
+      {caps:['Roof']},
+      {caps:['Panel','Qty.']},
+      {caps:['Weight']},
+    ],
     logoData:null, logoAspect:1, website:'solarix-solar.com', footerH:12, footFont:18,
     idx:0, busy:false,
 
@@ -409,8 +462,13 @@ function labelPress(){
       const cols=this.src==='paste'?[0]:(this.selected.length?this.selected:[0]);
       return cols.map(i=>(r[i]!=null?String(r[i]):'').trim()).filter(Boolean);
     },
+    get effectiveGroupMode(){
+      if(this.layout==='fields') return this.src==='paste' ? 'blank' : 'single';
+      return this.groupMode;
+    },
     get groups(){
-      if(this.groupMode==='blank'){
+      const mode=this.effectiveGroupMode;
+      if(mode==='blank'){
         const out=[]; let cur=[];
         (this.rowsRaw||[]).forEach(r=>{
           if(this.isBlank(r)){ if(cur.length){out.push(cur);cur=[];} }
@@ -419,7 +477,7 @@ function labelPress(){
         if(cur.length) out.push(cur);
         return out;
       }
-      if(this.groupMode==='column'){
+      if(mode==='column'){
         const map=new Map(), order=[];
         this.rows.forEach(r=>{
           const key=String(r[this.groupCol]!=null?r[this.groupCol]:'').trim();
@@ -431,14 +489,65 @@ function labelPress(){
       return this.rows.map(r=>[r]);   // one row per label
     },
 
-    // ---------- label text ----------
+    // ---------- label text (simple layout) ----------
     get labels(){
       return this.groups
         .map(g=>g.flatMap(r=>this.rowToLines(r)).join('\n'))
         .filter(t=>t!=='');
     },
     currentText(){ const L=this.labels; if(!L.length) return ''; return L[Math.min(this.idx,L.length-1)] ?? ''; },
-    next(){ if(this.idx<this.labels.length-1) this.idx++; },
+
+    // ---------- field values (project label layout) ----------
+    // positional: 1st value -> Project, 2nd -> Delivery, 3rd -> Package, etc.
+    get fieldLabels(){ return this.fieldRows.flatMap(r=>r.caps); },
+    fieldValues(g){
+      const arr=this.src==='paste' ? g.map(r=>r&&r[0]) : (g[0]||[]);
+      return this.fieldLabels.map((_,i)=>(arr[i]!=null?String(arr[i]).trim():''));
+    },
+    // a Roof value like "N3-1/O1-3/S4-3/W1-2" means this package is split across
+    // several roofs; expand it into one label per "Code-Qty" entry, overriding
+    // Roof and Qty. while the rest of the row's fields stay the same.
+    splitRoofEntries(values){
+      const ri=this.fieldLabels.indexOf('Roof'), qi=this.fieldLabels.indexOf('Qty.');
+      const roof=values[ri]||'';
+      if(ri<0 || qi<0 || !roof.includes('/')) return [values];
+      return roof.split('/').map(entry=>{
+        entry=entry.trim();
+        const cut=entry.lastIndexOf('-');
+        const code=cut<0?entry:entry.slice(0,cut), qty=cut<0?'':entry.slice(cut+1);
+        const v=values.slice();
+        v[ri]=code.trim(); v[qi]=qty.trim();
+        return v;
+      });
+    },
+    get fieldGroups(){
+      return this.groups
+        .map(g=>this.fieldValues(g))
+        .filter(arr=>arr.some(v=>v!==''))
+        .flatMap(arr=>this.splitRoofEntries(arr));
+    },
+    currentFieldValues(){
+      const G=this.fieldGroups; if(!G.length) return this.fieldLabels.map(()=>'');
+      return G[Math.min(this.idx,G.length-1)] ?? this.fieldLabels.map(()=>'');
+    },
+    fieldRowsWithValues(){
+      const vals=this.currentFieldValues();
+      const cols=this.fieldColsMm(), rowH=this.fieldRowHmm();
+      let i=0;
+      return this.fieldRows.map(row=>{
+        const split=row.caps.length===2;
+        const cap1=row.caps[0], val1=vals[i++]||'';
+        const cap2=split?row.caps[1]:null, val2=split?(vals[i++]||''):null;
+        const val1BoxW=split?cols.val1W:(cols.val1W+cols.gap+cols.cap2W+cols.gap+cols.val2W);
+        const val1Pt=this.fitValueFontPreview(val1,val1BoxW,rowH,this.fontSize).pt;
+        const val2Pt=split?this.fitValueFontPreview(val2,cols.val2W,rowH,this.fontSize).pt:null;
+        return { split, cap1, val1, cap2, val2, val1Pt, val2Pt };
+      });
+    },
+
+    // ---------- pagination (shared) ----------
+    get pageCount(){ return this.layout==='fields' ? this.fieldGroups.length : this.labels.length; },
+    next(){ if(this.idx<this.pageCount-1) this.idx++; },
     prev(){ if(this.idx>0) this.idx--; },
 
     // ---------- preview scaling ----------
@@ -466,10 +575,110 @@ function labelPress(){
       const d=this.previewDims();
       return `font-size:${this.footFont*0.3528*d.pxPerMm}px;`;
     },
+    capStyle(){
+      const d=this.previewDims();
+      const px=Math.max(6,this.fontSize*0.35)*0.3528*d.pxPerMm;
+      return `font-size:${px}px;text-align:left;`;
+    },
+    valStyle(ptOverride){
+      const d=this.previewDims();
+      const pt=ptOverride||this.fontSize;
+      const px=pt*0.3528*d.pxPerMm;
+      return `font-size:${px}px;text-align:${this.align};`;
+    },
+
+    // ---------- shared field-layout geometry (mm) ----------
+    // column-width ratio, in order: cap1, val1, cap2, val2 — edit these 4 numbers to resize columns.
+    fieldColRatio:[1.8,4,1.8,2.4],
+    fieldColsMm(){
+      const maxW=this.w-2*this.margin, gap=3, usableW=maxW-gap*3;
+      const total=this.fieldColRatio.reduce((a,b)=>a+b,0), unit=usableW/total;
+      const [cap1W,val1W,cap2W,val2W]=this.fieldColRatio.map(r=>r*unit);
+      return { maxW, gap, cap1W, val1W, cap2W, val2W };
+    },
+    fieldRowGridStyle(){
+      const [c1,v1,c2,v2]=this.fieldColRatio;
+      return `grid-template-columns:${c1}fr ${v1}fr ${c2}fr ${v2}fr;`;
+    },
+    fieldRowHmm(){
+      const footerH=this.hasFooter()?this.footerH:0;
+      return (this.h - 2*this.margin - footerH)/5;
+    },
+
+    // ---------- auto-shrink value text to fit its box (preview, canvas-measured) ----------
+    measureCtx(){
+      if(!this._mctx) this._mctx=document.createElement('canvas').getContext('2d');
+      return this._mctx;
+    },
+    wrapLines(ctx,text,maxWidthPx){
+      const lines=[];
+      String(text).split('\n').forEach(para=>{
+        const words=para.split(' ');
+        let line='';
+        words.forEach(w=>{
+          const test=line?line+' '+w:w;
+          if(!line || ctx.measureText(test).width<=maxWidthPx) line=test;
+          else { lines.push(line); line=w; }
+        });
+        lines.push(line);
+      });
+      return lines;
+    },
+    fitValueFontPreview(text,boxWmm,rowHmm,basePt,minPt=6){
+      if(!text) return { pt:basePt, lines:[] };
+      const ctx=this.measureCtx(), scale=10, boxWpx=boxWmm*scale;
+      let pt=basePt;
+      while(pt>minPt){
+        ctx.font=`bold ${pt*0.3528*scale}px Arial`;
+        const lines=this.wrapLines(ctx,text,boxWpx);
+        const lhMm=pt*0.3528*1.15;
+        if(lines.length*lhMm<=rowHmm*0.9) return { pt, lines };
+        pt-=0.5;
+      }
+      ctx.font=`bold ${minPt*0.3528*scale}px Arial`;
+      return { pt:minPt, lines:this.wrapLines(ctx,text,boxWpx) };
+    },
+
+    // ---------- auto-shrink value text to fit its box (PDF export, jsPDF-measured) ----------
+    fitValueFontPdf(doc,text,boxW,rowH,basePt,minPt=6){
+      if(!text) return { pt:basePt, lines:[] };
+      let pt=basePt;
+      while(pt>minPt){
+        doc.setFontSize(pt);
+        const lines=doc.splitTextToSize(text,boxW);
+        const lhMm=pt*0.3528*1.15;
+        if(lines.length*lhMm<=rowH*0.9) return { pt, lines };
+        pt-=0.5;
+      }
+      doc.setFontSize(minPt);
+      return { pt:minPt, lines:doc.splitTextToSize(text,boxW) };
+    },
 
     // ---------- PDF export ----------
+    drawFooter(doc,footerTop,footerH,maxW,web){
+      if(!this.hasFooter()) return;
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(22,24,26);
+      const centerY = footerTop + footerH/2;
+      if(this.logoData && web){
+        // logo bottom-left
+        let lh=footerH*0.8, lw=lh*this.logoAspect;
+        if(lw>maxW/2-4){ lw=maxW/2-4; lh=lw/this.logoAspect; }
+        doc.addImage(this.logoData,'PNG',this.margin,footerTop+footerH-lh,lw,lh);
+        // text bottom-right
+        doc.setFontSize(this.footFont);
+        doc.text(web,this.w-this.margin,this.h-this.margin,{align:'right',baseline:'bottom'});
+      } else if(this.logoData){
+        let lh=footerH*0.8, lw=lh*this.logoAspect;
+        if(lw>maxW){ lw=maxW; lh=lw/this.logoAspect; }
+        doc.addImage(this.logoData,'PNG',(this.w-lw)/2,centerY-lh/2,lw,lh);
+      } else if(web){
+        doc.setFontSize(this.footFont);
+        doc.text(web,this.w/2,centerY,{align:'center',baseline:'middle'});
+      }
+    },
     generate(){
-      if(!this.labels.length) return;
+      if(!this.pageCount) return;
       this.busy=true;
       try{
         const { jsPDF }=window.jspdf;
@@ -478,44 +687,81 @@ function labelPress(){
 
         const footerH = this.hasFooter() ? this.footerH : 0;
         const footerTop = this.h - this.margin - footerH;     // y where footer band starts
-        const areaTop = this.margin, areaBot = footerTop;      // main-text region
+        const areaTop = this.margin, areaBot = footerTop;      // main region above footer
         const maxW=this.w-2*this.margin;
-        const lhMm=this.fontSize*0.3528*1.15;
-        const x=this.align==='center'?this.w/2:(this.align==='right'?this.w-this.margin:this.margin);
         const web=(this.website||'').trim();
 
-        this.labels.forEach((text,i)=>{
-          if(i>0) doc.addPage([this.w,this.h],orient);
+        if(this.layout==='fields'){
+          // fixed 4-column grid (cap1, val1, cap2, val2) shared by every row, ratio 2:3:2:3,
+          // so value-1 always starts at the same x whether or not a row is split.
+          const cols=this.fieldColsMm(), gap=cols.gap;
+          const cap1X=this.margin;
+          const val1X=cap1X+cols.cap1W+gap;
+          const cap2X=val1X+cols.val1W+gap;
+          const val2X=cap2X+cols.cap2W+gap;
+          const rowRight=this.margin+maxW;
 
-          // main text, vertically centered in the area above the footer
-          doc.setFont('helvetica','normal');
-          doc.setFontSize(this.fontSize);
-          const lines=doc.splitTextToSize(text,maxW);
-          const blockH=lines.length*lhMm;
-          const y=areaTop + ((areaBot-areaTop)-blockH)/2 + lhMm*0.78;
-          doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
+          const capFontPt=Math.max(6,this.fontSize*0.35);
+          const rowH=this.fieldRowHmm();
 
-          // footer (same on every page) — logo left, text right, side by side
-          if(this.hasFooter()){
-            const centerY = footerTop + footerH/2;
-            if(this.logoData && web){
-              // logo bottom-left
-              let lh=footerH*0.8, lw=lh*this.logoAspect;
-              if(lw>maxW/2-4){ lw=maxW/2-4; lh=lw/this.logoAspect; }
-              doc.addImage(this.logoData,'PNG',this.margin,footerTop+footerH-lh,lw,lh);
-              // text bottom-right
-              doc.setFontSize(this.footFont);
-              doc.text(web,this.w-this.margin,this.h-this.margin,{align:'right',baseline:'bottom'});
-            } else if(this.logoData){
-              let lh=footerH*0.8, lw=lh*this.logoAspect;
-              if(lw>maxW){ lw=maxW; lh=lw/this.logoAspect; }
-              doc.addImage(this.logoData,'PNG',(this.w-lw)/2,centerY-lh/2,lw,lh);
-            } else if(web){
-              doc.setFontSize(this.footFont);
-              doc.text(web,this.w/2,centerY,{align:'center',baseline:'middle'});
-            }
-          }
-        });
+          const drawVal=(text,boxX,boxRight,rowMid)=>{
+            if(!text) return;
+            doc.setFont('helvetica','bold');
+            doc.setTextColor(22,24,26);
+            const boxW=boxRight-boxX;
+            const {pt,lines}=this.fitValueFontPdf(doc,text,boxW,rowH,this.fontSize);
+            const lhMm=pt*0.3528*1.15;
+            const x=this.align==='center'?(boxX+boxW/2):(this.align==='right'?boxRight:boxX);
+            const blockH=lines.length*lhMm;
+            const y=rowMid-blockH/2+lhMm*0.78;
+            doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
+          };
+          const drawCap=(text,x,rowMid)=>{
+            doc.setFont('helvetica','normal');
+            doc.setFontSize(capFontPt);
+            doc.setTextColor(106,110,107);
+            doc.text(text+':',x,rowMid,{align:'left',baseline:'middle'});
+          };
+
+          this.fieldGroups.forEach((vals,gi)=>{
+            if(gi>0) doc.addPage([this.w,this.h],orient);
+            let vi=0;
+
+            this.fieldRows.forEach((row,ri)=>{
+              const rowMid=areaTop+rowH*ri+rowH/2;
+              const split=row.caps.length===2;
+
+              drawCap(row.caps[0],cap1X,rowMid);
+              if(split){
+                drawVal(vals[vi++]||'',val1X,cap2X-gap,rowMid);
+                drawCap(row.caps[1],cap2X,rowMid);
+                drawVal(vals[vi++]||'',val2X,rowRight,rowMid);
+              } else {
+                drawVal(vals[vi++]||'',val1X,rowRight,rowMid);
+              }
+            });
+
+            this.drawFooter(doc,footerTop,footerH,maxW,web);
+          });
+        } else {
+          const lhMm=this.fontSize*0.3528*1.15;
+          const x=this.align==='center'?this.w/2:(this.align==='right'?this.w-this.margin:this.margin);
+
+          this.labels.forEach((text,i)=>{
+            if(i>0) doc.addPage([this.w,this.h],orient);
+
+            // main text, vertically centered in the area above the footer
+            doc.setFont('helvetica','normal');
+            doc.setFontSize(this.fontSize);
+            doc.setTextColor(22,24,26);
+            const lines=doc.splitTextToSize(text,maxW);
+            const blockH=lines.length*lhMm;
+            const y=areaTop + ((areaBot-areaTop)-blockH)/2 + lhMm*0.78;
+            doc.text(lines,x,y,{align:this.align,baseline:'alphabetic'});
+
+            this.drawFooter(doc,footerTop,footerH,maxW,web);
+          });
+        }
         doc.save('labels.pdf');
       } finally { this.busy=false; }
     },
